@@ -105,17 +105,17 @@ realise(GtkWidget *widget, void *data)
     GdkWindow *window;
 
     window = gtk_widget_get_window(widget);
-    gdk_wayland_window_set_use_custom_surface(window);
+//    gdk_wayland_window_set_use_custom_surface(window);
     win->gtk_surface = gdk_wayland_window_get_wl_surface(window);
 
     // set window as toplevel surface
-    if (win->wm_base) {
-        win->gtk_xdg_surface = xdg_wm_base_get_xdg_surface(win->wm_base, win->gtk_surface);
-        xdg_surface_add_listener(win->gtk_xdg_surface, &xdg_surface_listener, NULL);
+//    if (win->wm_base) {
+//        win->gtk_xdg_surface = xdg_wm_base_get_xdg_surface(win->wm_base, win->gtk_surface);
+//        xdg_surface_add_listener(win->gtk_xdg_surface, &xdg_surface_listener, NULL);
 
-        win->gtk_xdg_toplevel = xdg_surface_get_toplevel(win->gtk_xdg_surface);
-        xdg_toplevel_add_listener(win->gtk_xdg_toplevel, &xdg_toplevel_listener, win);
-    }
+//        win->gtk_xdg_toplevel = xdg_surface_get_toplevel(win->gtk_xdg_surface);
+//        xdg_toplevel_add_listener(win->gtk_xdg_toplevel, &xdg_toplevel_listener, win);
+//    }
 }
 
 static gboolean
