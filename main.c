@@ -3,17 +3,131 @@
 
 #include <xdg-shell-client-protocol.h>
 
+#include <stdbool.h>
+#include <EGL/egl.h>
+#include <wayland-egl.h>
+#include <GL/gl.h>
+
 struct window {
     GtkWidget *gtk_win;
 
     struct wl_display *display;
+    struct wl_compositor *compositor;
     struct wl_registry *registry;
     struct xdg_wm_base *wm_base;
 
     struct wl_surface *gtk_surface;
     struct xdg_surface *gtk_xdg_surface;
     struct xdg_toplevel *gtk_xdg_toplevel;
+
+    EGLDisplay egl_display;
+    EGLContext egl_context;
+    struct wl_surface *surface;
+    struct wl_egl_window *egl_window;
+    EGLSurface egl_surface;
 };
+
+static bool
+setup(struct window *window)
+{
+    static const EGLint config_attribs[] = {
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
+        EGL_NONE
+    };
+
+    EGLint major, minor;
+    EGLint n;
+    EGLConfig config;
+
+    window->egl_display =
+        eglGetDisplay((EGLNativeDisplayType)window->display);
+
+    if (eglInitialize(window->egl_display, &major, &minor) == EGL_FALSE) {
+        fprintf(stderr, "Cannot initialise EGL!\n");
+        return false;
+    }
+
+    if (eglBindAPI(EGL_OPENGL_API) == EGL_FALSE) {
+        fprintf(stderr, "Cannot bind EGL API!\n");
+        return false;
+    }
+
+    if (eglChooseConfig(window->egl_display,
+                config_attribs,
+                &config, 1, &n) == EGL_FALSE) {
+        fprintf(stderr, "No matching EGL configurations!\n");
+        return false;
+    }
+
+    window->egl_context = eglCreateContext(window->egl_display,
+                               config, EGL_NO_CONTEXT, NULL);
+
+    if (window->egl_context == EGL_NO_CONTEXT) {
+        fprintf(stderr, "No EGL context!\n");
+        return false;
+    }
+
+    window->surface = wl_compositor_create_surface(window->compositor);
+
+    window->egl_window = wl_egl_window_create(window->surface,
+                          200, 200);
+
+    window->egl_surface = eglCreateWindowSurface(
+                      window->egl_display, config,
+                      (EGLNativeWindowType)window->egl_window,
+                      NULL);
+
+    eglMakeCurrent(window->egl_display, window->egl_surface,
+               window->egl_surface, window->egl_context);
+
+    return true;
+}
+
+static float
+hue_to_channel(const float *const hue, const int n)
+{
+    /* convert hue to rgb channels with saturation and value equal to 1
+     * https://en.wikipedia.org/wiki/HSL_and_HSV#HSV_to_RGB_alternative
+     */
+    const float k = fmod(n + ((*hue) * 3 / M_PI), 6);
+    return 1 - MAX(0, MIN(MIN(k, 4 - k), 1));
+}
+
+static void
+hue_to_rgb(const float *const hue, float (*rgb)[3])
+{
+    (*rgb)[0] = hue_to_channel(hue, 5);
+    (*rgb)[1] = hue_to_channel(hue, 3);
+    (*rgb)[2] = hue_to_channel(hue, 1);
+}
+
+static void
+draw(struct window *window)
+{
+    struct timespec tv;
+    double time;
+
+    /* change of colour hue (HSV space) in rad/sec */
+    static const float hue_change = (2 * M_PI) / 10;
+    float hue;
+    float rgb[3] = {0,0,0};
+
+    clock_gettime(CLOCK_REALTIME, &tv);
+    time = tv.tv_sec + tv.tv_nsec * 1e-9;
+
+    hue = fmod(time * hue_change, 2 * M_PI);
+
+    hue_to_rgb(&hue, &rgb);
+
+    glClearColor(rgb[0], rgb[1], rgb[2], 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    eglSwapBuffers(window->egl_display, window->egl_surface);
+}
 
 static void
 xdg_toplevel_configure(void *data, struct xdg_toplevel *toplevel,
@@ -147,6 +261,9 @@ int main(int argc, char* argv[])
     gtk_init(&argc, &argv);
 
     window.display = gdk_wayland_display_get_wl_display(gdk_display_get_default());
+    window.compositor = gdk_wayland_display_get_wl_compositor(gdk_display_get_default());
+
+    setup(&window);
 
     window.registry = wl_display_get_registry(window.display);
     wl_registry_add_listener(window.registry, &registry_listener, &window);

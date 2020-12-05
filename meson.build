@@ -4,6 +4,12 @@ project('gtk_surface', 'c')
 gtk_dep = dependency('gtk+-3.0')
 wayland_dep = dependency('wayland-client')
 
+cc = meson.get_compiler('c')
+m_dep = cc.find_library('m', required : false)
+egl_dep = dependency('egl')
+gl_dep = dependency('gl')
+wayland_egl_dep = dependency('wayland-egl')
+
 # wayland protocol scanner
 dep_scanner = dependency('wayland-scanner', native: true)
 prog_scanner = find_program(dep_scanner.get_pkgconfig_variable('wayland_scanner'))
@@ -37,4 +43,4 @@ foreach output_type: [ 'client-header', 'private-code' ]
     set_variable(var_name, target)
 endforeach
 
-executable('gtk_surface', sources: ['main.c', target], dependencies: [gtk_dep, wayland_dep])
+executable('gtk_surface', sources: ['main.c', target], dependencies: [gtk_dep, wayland_dep, m_dep, wayland_egl_dep, egl_dep, gl_dep])
