@@ -25,6 +25,8 @@ struct window {
     struct wl_surface *surface;
     struct wl_egl_window *egl_window;
     EGLSurface egl_surface;
+    struct wl_subcompositor *subcompositor;
+    struct wl_subsurface *frame_subsurface;
 };
 
 static bool
@@ -198,6 +200,9 @@ registry_global(void *data, struct wl_registry *registry,
         win->wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
         xdg_wm_base_add_listener(win->wm_base, &wm_base_listener, NULL);
     }
+    else if (strcmp(interface, wl_subcompositor_interface.name) == 0) {
+        win->subcompositor = wl_registry_bind(registry, name, &wl_subcompositor_interface, 1);
+    }
 }
 
 void registry_global_remove(void *data,
@@ -230,6 +235,12 @@ realise(GtkWidget *widget, void *data)
 //        win->gtk_xdg_toplevel = xdg_surface_get_toplevel(win->gtk_xdg_surface);
 //        xdg_toplevel_add_listener(win->gtk_xdg_toplevel, &xdg_toplevel_listener, win);
 //    }
+
+    win->frame_subsurface = wl_subcompositor_get_subsurface(
+                    win->subcompositor,
+                    win->surface, win->gtk_surface);
+
+    wl_subsurface_place_above(win->frame_subsurface, win->gtk_surface);
 }
 
 static gboolean
@@ -252,11 +263,18 @@ state_changed(GtkWidget *widget, GdkEventWindowState *event, gpointer user_data)
     return FALSE;
 }
 
+void
+quit()
+{
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char* argv[])
 {
     struct window window;
     window.gtk_xdg_surface = NULL;
     window.gtk_xdg_toplevel = NULL;
+    window.subcompositor = NULL;
 
     gtk_init(&argc, &argv);
 
@@ -268,14 +286,23 @@ int main(int argc, char* argv[])
     window.registry = wl_display_get_registry(window.display);
     wl_registry_add_listener(window.registry, &registry_listener, &window);
     wl_display_dispatch(window.display);
+    wl_display_dispatch(window.display);
 
     window.gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     g_signal_connect(window.gtk_win, "realize", G_CALLBACK(realise), &window);
-    g_signal_connect(window.gtk_win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+//    g_signal_connect(window.gtk_win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    g_signal_connect(window.gtk_win, "destroy", G_CALLBACK(quit), NULL);
     g_signal_connect(window.gtk_win, "window-state-event", G_CALLBACK(state_changed), &window);
     gtk_widget_show(window.gtk_win);
 
-    gtk_main();
+
+//    gtk_main();
+
+    while (true) {
+        gtk_main_iteration();
+        printf("loop\n"); fflush(stdout);
+        draw(&window);
+    };
 
     return 0;
 }
