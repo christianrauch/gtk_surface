@@ -8,6 +8,9 @@
 #include <wayland-egl.h>
 #include <GL/gl.h>
 
+// use EGL surface as toplevel (instead of as subsurface)
+//#define EGL_TOPLEVEL
+
 struct window {
     GtkWidget *gtk_win;
 
@@ -28,6 +31,9 @@ struct window {
     struct wl_subcompositor *subcompositor;
     struct wl_subsurface *frame_subsurface;
 };
+
+static const struct xdg_surface_listener xdg_surface_listener;
+static const struct xdg_toplevel_listener xdg_toplevel_listener;
 
 static bool
 setup(struct window *window)
@@ -85,6 +91,16 @@ setup(struct window *window)
 
     eglMakeCurrent(window->egl_display, window->egl_surface,
                window->egl_surface, window->egl_context);
+
+#ifdef EGL_TOPLEVEL
+    if (window->wm_base) {
+        window->gtk_xdg_surface = xdg_wm_base_get_xdg_surface(window->wm_base, window->surface);
+        xdg_surface_add_listener(window->gtk_xdg_surface, &xdg_surface_listener, NULL);
+
+        window->gtk_xdg_toplevel = xdg_surface_get_toplevel(window->gtk_xdg_surface);
+        xdg_toplevel_add_listener(window->gtk_xdg_toplevel, &xdg_toplevel_listener, window);
+    }
+#endif
 
     return true;
 }
@@ -236,11 +252,13 @@ realise(GtkWidget *widget, void *data)
 //        xdg_toplevel_add_listener(win->gtk_xdg_toplevel, &xdg_toplevel_listener, win);
 //    }
 
+#ifndef EGL_TOPLEVEL
     win->frame_subsurface = wl_subcompositor_get_subsurface(
                     win->subcompositor,
                     win->surface, win->gtk_surface);
 
     wl_subsurface_place_above(win->frame_subsurface, win->gtk_surface);
+#endif
 }
 
 static gboolean
@@ -281,12 +299,11 @@ int main(int argc, char* argv[])
     window.display = gdk_wayland_display_get_wl_display(gdk_display_get_default());
     window.compositor = gdk_wayland_display_get_wl_compositor(gdk_display_get_default());
 
-    setup(&window);
-
     window.registry = wl_display_get_registry(window.display);
     wl_registry_add_listener(window.registry, &registry_listener, &window);
     wl_display_dispatch(window.display);
-    wl_display_dispatch(window.display);
+
+    setup(&window);
 
     window.gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     g_signal_connect(window.gtk_win, "realize", G_CALLBACK(realise), &window);
@@ -295,12 +312,12 @@ int main(int argc, char* argv[])
     g_signal_connect(window.gtk_win, "window-state-event", G_CALLBACK(state_changed), &window);
     gtk_widget_show(window.gtk_win);
 
-
 //    gtk_main();
 
+    size_t i = 0;
     while (true) {
         gtk_main_iteration();
-        printf("loop\n"); fflush(stdout);
+        printf("loop %zu\n", i++); fflush(stdout);
         draw(&window);
     };
 
