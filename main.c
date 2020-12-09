@@ -94,7 +94,7 @@ setup(struct window *window)
     eglMakeCurrent(window->egl_display, window->egl_surface,
                window->egl_surface, window->egl_context);
 
-    eglSwapInterval(window->egl_display, 0);
+//    eglSwapInterval(window->egl_display, 0);
 
 #ifdef EGL_TOPLEVEL
     if (window->wm_base) {
@@ -128,6 +128,19 @@ hue_to_rgb(const float *const hue, float (*rgb)[3])
 }
 
 static void
+draw(struct window *window);
+
+static void
+frame_handle_done(void *data, struct wl_callback *callback, uint32_t time) {
+    wl_callback_destroy(callback);
+    draw(data);
+}
+
+static const struct wl_callback_listener frame_listener = {
+    .done = frame_handle_done,
+};
+
+static void
 draw(struct window *window)
 {
     struct timespec tv;
@@ -138,8 +151,12 @@ draw(struct window *window)
     float hue;
     float rgb[3] = {0,0,0};
 
+    eglMakeCurrent(window->egl_display, window->egl_surface,
+                   window->egl_surface, window->egl_context);
+
     GtkAllocation clip;
     gtk_widget_get_clip(window->gtk_area, &clip);
+    wl_subsurface_set_position(window->frame_subsurface, clip.x, clip.y);
     wl_egl_window_resize(window->egl_window, clip.width, clip.height, 0, 0);
 
     clock_gettime(CLOCK_REALTIME, &tv);
@@ -151,6 +168,9 @@ draw(struct window *window)
 
     glClearColor(rgb[0], rgb[1], rgb[2], 1);
     glClear(GL_COLOR_BUFFER_BIT);
+
+    struct wl_callback *callback = wl_surface_frame(window->surface);
+    wl_callback_add_listener(callback, &frame_listener, window);
 
     eglSwapBuffers(window->egl_display, window->egl_surface);
 }
@@ -267,10 +287,6 @@ realise(GtkWidget *widget, void *data)
 
 //    wl_subsurface_set_desync(win->frame_subsurface);
 
-    GtkAllocation clip;
-    gtk_widget_get_clip(win->gtk_area, &clip);
-    wl_subsurface_set_position(win->frame_subsurface, clip.x, clip.y);
-
     wl_subsurface_place_above(win->frame_subsurface, win->gtk_surface);
 #endif
 }
@@ -329,14 +345,17 @@ int main(int argc, char* argv[])
     g_signal_connect(window.gtk_win, "window-state-event", G_CALLBACK(state_changed), &window);
     gtk_widget_show_all(window.gtk_win);
 
+    // draw first frame and set frame callback
+    draw(&window);
+
 //    gtk_main();
 
 //    size_t i = 0;
     while (true) {
         gtk_main_iteration();
 //        printf("loop %zu\n", i++); fflush(stdout);
-        draw(&window);
-        wl_surface_commit(window.gtk_surface);
+//        draw(&window);
+        gtk_widget_queue_draw(window.gtk_win);
     };
 
     return 0;
