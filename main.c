@@ -13,6 +13,7 @@
 
 struct window {
     GtkWidget *gtk_win;
+    GtkWidget *gtk_area;
 
     struct wl_display *display;
     struct wl_compositor *compositor;
@@ -81,6 +82,7 @@ setup(struct window *window)
 
     window->surface = wl_compositor_create_surface(window->compositor);
 
+    // TODO: sensible default values
     window->egl_window = wl_egl_window_create(window->surface,
                           200, 200);
 
@@ -91,6 +93,8 @@ setup(struct window *window)
 
     eglMakeCurrent(window->egl_display, window->egl_surface,
                window->egl_surface, window->egl_context);
+
+    eglSwapInterval(window->egl_display, 0);
 
 #ifdef EGL_TOPLEVEL
     if (window->wm_base) {
@@ -133,6 +137,10 @@ draw(struct window *window)
     static const float hue_change = (2 * M_PI) / 10;
     float hue;
     float rgb[3] = {0,0,0};
+
+    GtkAllocation clip;
+    gtk_widget_get_clip(window->gtk_area, &clip);
+    wl_egl_window_resize(window->egl_window, clip.width, clip.height, 0, 0);
 
     clock_gettime(CLOCK_REALTIME, &tv);
     time = tv.tv_sec + tv.tv_nsec * 1e-9;
@@ -257,6 +265,12 @@ realise(GtkWidget *widget, void *data)
                     win->subcompositor,
                     win->surface, win->gtk_surface);
 
+//    wl_subsurface_set_desync(win->frame_subsurface);
+
+    GtkAllocation clip;
+    gtk_widget_get_clip(win->gtk_area, &clip);
+    wl_subsurface_set_position(win->frame_subsurface, clip.x, clip.y);
+
     wl_subsurface_place_above(win->frame_subsurface, win->gtk_surface);
 #endif
 }
@@ -306,19 +320,23 @@ int main(int argc, char* argv[])
     setup(&window);
 
     window.gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    // content area for querying position and size
+    window.gtk_area = gtk_drawing_area_new();
+    gtk_container_add(GTK_CONTAINER (window.gtk_win), window.gtk_area);
     g_signal_connect(window.gtk_win, "realize", G_CALLBACK(realise), &window);
 //    g_signal_connect(window.gtk_win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(window.gtk_win, "destroy", G_CALLBACK(quit), NULL);
     g_signal_connect(window.gtk_win, "window-state-event", G_CALLBACK(state_changed), &window);
-    gtk_widget_show(window.gtk_win);
+    gtk_widget_show_all(window.gtk_win);
 
 //    gtk_main();
 
-    size_t i = 0;
+//    size_t i = 0;
     while (true) {
         gtk_main_iteration();
-        printf("loop %zu\n", i++); fflush(stdout);
+//        printf("loop %zu\n", i++); fflush(stdout);
         draw(&window);
+        wl_surface_commit(window.gtk_surface);
     };
 
     return 0;
