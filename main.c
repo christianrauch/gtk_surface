@@ -284,8 +284,6 @@ realise(GtkWidget *widget, void *data)
                     win->subcompositor,
                     win->surface, win->gtk_surface);
 
-//    wl_subsurface_set_desync(win->frame_subsurface);
-
     wl_subsurface_place_above(win->frame_subsurface, win->gtk_surface);
 
     GtkAllocation clip;
@@ -329,9 +327,6 @@ content_resized(GtkWidget *widget, GtkAllocation *allocation, void *data) {
     if (window->frame_subsurface)
         wl_subsurface_set_position(window->frame_subsurface, allocation->x, allocation->y);
     wl_egl_window_resize(window->egl_window, allocation->width, allocation->height, 0, 0);
-
-//    if (window->gtk_surface)
-//        wl_surface_commit(window->gtk_surface);
 }
 
 static gboolean
@@ -352,34 +347,6 @@ content_update(GtkWidget     *widget,
     eglSwapBuffers(window->egl_display, window->egl_surface);
 
     return TRUE;
-}
-
-static void
-on_frame_clock_before_paint (GdkFrameClock *clock,
-                             void     *data)
-{
-    printf("before-paint: %li\n", gdk_frame_clock_get_frame_time(clock)); fflush(stdout);
-//    struct window *window = data;
-//    draw(window);
-//    wl_surface_commit(window->gtk_surface);
-}
-
-static void
-on_frame_clock_after_paint (GdkFrameClock *clock,
-                            void     *data)
-{
-    printf("after-paint: %li\n", gdk_frame_clock_get_frame_time(clock)); fflush(stdout);
-
-    struct window *window = data;
-//    draw(window);
-
-//    gdk_window_thaw_updates(gtk_widget_get_window(window->gtk_win));
-}
-
-static void
-commited(void *parent_impl, void *data)
-{
-    printf("commited\n"); fflush(stdout);
 }
 
 int main(int argc, char* argv[])
@@ -404,56 +371,15 @@ int main(int argc, char* argv[])
     window.gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     // content area for querying position and size
     window.gtk_area = gtk_drawing_area_new();
-//    gtk_widget_set_app_paintable(window.gtk_area, true);
     gtk_container_add(GTK_CONTAINER (window.gtk_win), window.gtk_area);
     g_signal_connect(window.gtk_win, "realize", G_CALLBACK(realise), &window);
-//    g_signal_connect(window.gtk_win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     g_signal_connect(window.gtk_win, "destroy", G_CALLBACK(quit), NULL);
-//    g_signal_connect(window.gtk_win, "window-state-event", G_CALLBACK(state_changed), &window);
-//    g_signal_connect(window.gtk_area, "size-allocate", G_CALLBACK(content_resized), &window);
-//    g_signal_connect(window.gtk_win, "draw", G_CALLBACK(win_draw), &window);
-//    g_signal_connect(gtk_widget_get_window(window.gtk_win), "commited", G_CALLBACK(commited), &window);
     gtk_widget_add_tick_callback(window.gtk_win, content_update, &window, NULL);
     gtk_widget_show_all(window.gtk_win);
 
-//    GdkFrameClock *frame_clock = gdk_window_get_frame_clock(gtk_widget_get_window(window.gtk_win));
-//    g_signal_connect (frame_clock, "before-paint", G_CALLBACK (on_frame_clock_before_paint), &window);
-//    g_signal_connect (frame_clock, "after-paint", G_CALLBACK (on_frame_clock_after_paint), &window);
-
-
-
-    // draw first frame and set frame callback
-//    draw(&window);
-
-//    gtk_main();
-
-//    typedef enum {
-//      GDK_FRAME_CLOCK_PHASE_NONE          = 0,
-//      GDK_FRAME_CLOCK_PHASE_FLUSH_EVENTS  = 1 << 0,
-//      GDK_FRAME_CLOCK_PHASE_BEFORE_PAINT  = 1 << 1,
-//      GDK_FRAME_CLOCK_PHASE_UPDATE        = 1 << 2,
-//      GDK_FRAME_CLOCK_PHASE_LAYOUT        = 1 << 3,
-//      GDK_FRAME_CLOCK_PHASE_PAINT         = 1 << 4,
-//      GDK_FRAME_CLOCK_PHASE_RESUME_EVENTS = 1 << 5,
-//      GDK_FRAME_CLOCK_PHASE_AFTER_PAINT   = 1 << 6
-//    } GdkFrameClockPhase;
-
-//    size_t i = 0;
     while (true) {
         gtk_main_iteration();
-//        gtk_widget_set_state_flags(window.gtk_win, GTK_STATE_FLAG_PRELIGHT, true);
-//        gdk_frame_clock_request_phase(frame_clock, GDK_FRAME_CLOCK_PHASE_FLUSH_EVENTS);
-//        gdk_frame_clock_request_phase(frame_clock, GDK_FRAME_CLOCK_PHASE_BEFORE_PAINT);
-//        gdk_frame_clock_request_phase(frame_clock, GDK_FRAME_CLOCK_PHASE_UPDATE);
-//        gdk_frame_clock_request_phase(frame_clock, GDK_FRAME_CLOCK_PHASE_LAYOUT);
-//        gdk_frame_clock_request_phase(frame_clock, GDK_FRAME_CLOCK_PHASE_PAINT);
-//        gdk_frame_clock_request_phase(frame_clock, GDK_FRAME_CLOCK_PHASE_RESUME_EVENTS);
-//        gdk_frame_clock_request_phase(frame_clock, GDK_FRAME_CLOCK_PHASE_AFTER_PAINT);
-//        printf("loop %zu\n", i++); fflush(stdout);
-//        draw(&window);
         gtk_widget_queue_draw(window.gtk_win);
-        // TODO: print timing of GTK commit and EGL swap
-//        gdk_window_freeze_updates(gtk_widget_get_window(window.gtk_win));
     };
 
     return 0;
